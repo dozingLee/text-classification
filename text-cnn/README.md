@@ -2,6 +2,12 @@
 * 原理：核心点在于使用卷积来捕捉局部相关性，具体到文本分类任务中可以利用CNN来提取句子中类似 n-gram 的关键信息。
 ![](data/textcnn.png)
 * **textcnn**详细过程：第一层是图中最左边的7乘5的句子矩阵，每行是词向量，维度=5，这个可以类比为图像中的原始像素点了。然后经过不同 filter_size的一维卷积层（这里是2,3,4），每个filter_size 有filter_num（这里是2）个输出 channel。第三层是一个1-max pooling层，这样不同长度句子经过pooling层之后都能变成定长的表示了，最后接一层全连接的 softmax 层，输出每个类别的概率。
+```python
+        解释说明：
+        filter_size表示卷积核跨词向量的维度，一般有2,3,4三个规模，用于捕获一个句子中关系最大相邻的两个词、三个词和四个词。
+        filter_num表示每个filter_size规模下对应filter_num个不同的filter，比如这里有2个不同filter。一般这里的filter_num与实际要求的输出维度相对应。
+        最后文本提取的特征向量的维度就是 filter_size * filter_num 维。比如filter_size=3，filter_num=100，那么最后生成特征向量维度为300维。
+```
 * 特征：这里的特征就是词向量，有静态（static）和非静态（non-static）方式。static方式采用比如word2vec预训练的词向量，训练过程不更新词向量，实质上属于迁移学习了，特别是数据量比较小的情况下，采用静态的词向量往往效果不错。non-static则是在训练过程中更新词向量（fine_tune）。推荐的方式是 non-static 中的 fine-tunning方式，它是以预训练（pre-train）的word2vec向量初始化词向量，训练过程中调整词向量，能加速收敛，当然如果有充足的训练数据和资源，直接随机初始化词向量效果也是可以的。
 * 一维卷积（conv-1d）：图像是二维数据，经过词向量表达的文本为一维数据，因此在TextCNN卷积用的是一维卷积。一维卷积带来的问题是需要设计通过不同 filter_size 的 filter 获取不同宽度的视野。
 * Pooling层：利用CNN解决文本分类问题的文章还是很多的，比如这篇 [A Convolutional Neural Network for Modelling Sentences ](https://arxiv.org/pdf/1404.2188.pdf)最有意思的输入是在 pooling 改成 **(dynamic) k-max pooling**，pooling阶段保留 k 个最大的信息，保留了全局的序列信息。比如在情感分析场景，举个例子：

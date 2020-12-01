@@ -3,27 +3,28 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+
 class TextCNN(nn.Module):
     # 多通道textcnn
     def __init__(self, args):
         super(TextCNN, self).__init__()
         self.args = args
 
-        label_num = args.label_num # 标签的个数
-        filter_num = args.filter_num # 卷积核的个数
-        filter_sizes = [int(fsz) for fsz in args.filter_sizes.split(',')]
+        label_num = args.label_num  # 标签的个数
+        filter_num = args.filter_num    # 卷积核的个数
+        filter_sizes = [int(fsz) for fsz in args.filter_sizes.split(',')]   # filter_sizes数组：[3,4,5]
 
-        vocab_size = args.vocab_size
+        vocab_size = args.vocab_size    # ？？？
         embedding_dim = args.embedding_dim
 
         self.embedding = nn.Embedding(vocab_size, embedding_dim)
-        if args.static: # 如果使用预训练词向量，则提前加载，当不需要微调时设置freeze为True
+        if args.static: # 如果使用预训练，词向量则提前加载，当不需要微调时设置freeze为True
             self.embedding = self.embedding.from_pretrained(args.vectors, freeze=not args.fine_tune)
 
         self.convs = nn.ModuleList(
             [nn.Conv2d(1, filter_num, (fsz, embedding_dim)) for fsz in filter_sizes])
         self.dropout = nn.Dropout(args.dropout)
-        self.linear = nn.Linear(len(filter_sizes)*filter_num, label_num)
+        self.linear = nn.Linear(len(filter_sizes)*filter_num, label_num)    # 输出维度：len(filter_sizes)*filter_num
 
     def forward(self, x):
         # 输入x的维度为(batch_size, max_len), max_len可以通过torchtext设置或自动获取为训练样本的最大=长度
