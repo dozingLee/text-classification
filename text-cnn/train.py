@@ -9,41 +9,54 @@ from model import TextCNN
 parser = argparse.ArgumentParser(description='TextCNN text classifier')
 
 parser.add_argument('-lr', type=float, default=0.001, help='学习率')
-parser.add_argument('-batch-size', type=int, default=128)
-parser.add_argument('-epoch', type=int, default=20)
+parser.add_argument('-batch-size', type=int, default=128, help='batch，每一个batch大小更新一次参数')
+parser.add_argument('-epoch', type=int, default=20, help='epoch，每一个epoch大小所有样本都训练了一次')
 parser.add_argument('-filter-num', type=int, default=100, help='卷积核的个数')
 parser.add_argument('-filter-sizes', type=str, default='3,4,5', help='不同卷积核大小')
 parser.add_argument('-embedding-dim', type=int, default=128, help='词向量的维度')
 parser.add_argument('-dropout', type=float, default=0.5)
-parser.add_argument('-label-num', type=int, default=2, help='标签个数')
+parser.add_argument('-label-num', type=int, default=2, help='标签个数')  # 不懂，为什么是2
 parser.add_argument('-static', type=bool, default=False, help='是否使用预训练词向量')
 parser.add_argument('-fine-tune', type=bool, default=True, help='预训练词向量是否要微调')
-parser.add_argument('-cuda', type=bool, default=False)
+parser.add_argument('-cuda', type=bool, default=True, help='是否使用GPU')
 parser.add_argument('-log-interval', type=int, default=1, help='经过多少iteration记录一次训练状态')
-parser.add_argument('-test-interval', type=int, default=100,help='经过多少iteration对验证集进行测试')
+parser.add_argument('-test-interval', type=int, default=100, help='经过多少iteration对验证集进行测试')
 parser.add_argument('-early-stopping', type=int, default=1000, help='早停时迭代的次数')
 parser.add_argument('-save-best', type=bool, default=True, help='当得到更好的准确度是否要保存')
 parser.add_argument('-save-dir', type=str, default='model_dir', help='存储训练模型位置')
 
 args = parser.parse_args()
 
+
 def train(args):
-    train_iter, dev_iter = data_processor.load_data(args) # 将数据分为训练集和验证集
-    print('加载数据完成')
+    print('** 正在加载数据...')
+    train_iter, dev_iter = data_processor.load_data(args)  # 将数据分为训练集和验证集
+    print('-- 加载数据完成')
+
+    print('torch.cuda.is_available(): ', torch.cuda.is_available())
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+    print('** 正在加载模型...')
     model = TextCNN(args)
-    if args.cuda: model.cuda()
+    # model.to(device)
+    print('-- 加载模型完成...')
+
     optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
     steps = 0
     best_acc = 0
     last_step = 0
-    model.train()
+    # model.train()
+
     for epoch in range(1, args.epoch + 1):
         for batch in train_iter:
-            feature, target = batch.text, batch.label
-            # t_()函数表示将(max_len, batch_size)转置为(batch_size, max_len)
-            feature.data.t_(), target.data.sub_(1) # target减去1
-            if args.cuda:
-                feature, target = feature.cuda(), target.cuda()
+            with torch.no_grad():
+                feature, target = batch.text.t_(), batch.label.sub_(1)
+
+            # # t_()函数表示将(max_len, batch_size)转置为(batch_size, max_len)
+            # with torch.no_grad():
+            #     feature.data.t_(), target.data.sub_(1)  # target减去1
+            # if args.cuda:
+            #     feature, target = feature.cuda(), target.cuda()
             optimizer.zero_grad()
             logits = model(feature)
             loss = F.cross_entropy(logits, target)
@@ -73,16 +86,21 @@ def train(args):
                         print('\nearly stop by {} steps, acc: {:.4f}%'.format(args.early_stopping, best_acc))
                         raise KeyboardInterrupt
 
+
 '''
 对验证集进行测试 
 '''
+
+
 def eval(data_iter, model, args):
     corrects, avg_loss = 0, 0
     for batch in data_iter:
-        feature, target = batch.text, batch.label
-        feature.data.t_(), target.data.sub_(1)
-        if args.cuda:
-            feature, target = feature.cuda(), target.cuda()
+        with torch.no_grad():
+            feature, target = batch.text.t_(), batch.label.sub_(1)
+        # feature, target = batch.text, batch.label
+        # feature.data.t_(), target.data.sub_(1)
+        # if args.cuda:
+        #     feature, target = feature.cuda(), target.cuda()
         logits = model(feature)
         loss = F.cross_entropy(logits, target)
         avg_loss += loss.item()
@@ -97,6 +115,7 @@ def eval(data_iter, model, args):
                                                                        size))
     return accuracy
 
+
 def save(model, save_dir, save_prefix, steps):
     if not os.path.isdir(save_dir):
         os.makedirs(save_dir)
@@ -104,4 +123,6 @@ def save(model, save_dir, save_prefix, steps):
     save_path = '{}_steps_{}.pt'.format(save_prefix, steps)
     torch.save(model.state_dict(), save_path)
 
-train(args)
+
+if __name__ == '__main__':
+    train(args)
